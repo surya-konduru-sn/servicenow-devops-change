@@ -7,9 +7,10 @@ async function doFetch({
   username,
   passwd,
   jobname,
-  githubContextStr
+  githubContextStr,
+  prevPollChangeDetails
 }) {
-    console.log(`\nPolling for change status..........`);
+   
 
     let githubContext = JSON.parse(githubContextStr);
     
@@ -83,14 +84,19 @@ async function doFetch({
             throw new Error("500");
         }
 
-        let details =  changeStatus.details;
-        console.log('\n     \x1b[1m\x1b[32m'+JSON.stringify(details)+'\x1b[0m\x1b[0m');
-
-        let changeState =  details.status;
-
+        let currChangeDetails = changeStatus.details;
+        let changeState = currChangeDetails.status;
+    
         if (responseCode == 201) {
           if (changeState == "pending_decision") {
-            throw new Error("201");
+            if (isChangeDetailsChanged(prevPollChangeDetails, currChangeDetails)) {
+              console.log('\n \x1b[1m\x1b[32m' + JSON.stringify(currChangeDetails) + '\x1b[0m\x1b[0m');
+            }
+            throw new Error(JSON.stringify({ "statusCode": "201", "details": currChangeDetails }));
+          } else if((changeState == "failed")||(changeState == "error")) {
+              console.log("changeState - "+changeState+", currChangeDetails -"+currChangeDetails);
+              core.setFailed(currChangeDetails.details);
+              throw new Error("404");  
           } else
             throw new Error("202");
         }
@@ -102,6 +108,18 @@ async function doFetch({
         throw new Error("500");
 
     return true;
+}
+
+function isChangeDetailsChanged(prevPollChangeDetails, currChangeDetails) {
+  if (Object.keys(currChangeDetails).length !== Object.keys(prevPollChangeDetails).length) {
+    return true;
+  }
+  for (let field of Object.keys(currChangeDetails)) {
+    if (currChangeDetails[field] !== prevPollChangeDetails[field]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 module.exports = { doFetch };
